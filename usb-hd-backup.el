@@ -1,4 +1,4 @@
-;; usb-hd-backup.el --- Backup your computer on an external hard drive via USB
+;;; usb-hd-backup.el --- Backup your computer on an external hard drive via USB
 ;;
 ;; Author: jrtalbot <jrtalbot99@gmail.com>
 ;; Maintainer: jrtalbot <jrtalbot99@gmail.com>
@@ -25,22 +25,26 @@
 ;; This recipe provides a way to backup your data on an external hard drive via USB.
 
 ;;; Code:
+;; -*- lexical-binding: t -*-
 (defun usb-hd-backup ()
   "Backup to an external hard drive via USB."
   (interactive)
-  (let ((default-directory "/sudo::"))
-    (let ((process (start-process "backup" "*backup*" "rsync" "-arvup" "--files-from=/home/jrtalbot/rsync.txt" "/home/jrtalbot/" "/media/jrtalbot/BACKUP")))
-      (display-buffer "*backup*")
-      (set-process-sentinel process 'backup-sentinel))
-    )
-  )
+  (let ((drive-directory "/media/jrtalbot/BACKUP")
+        (backup-home-directory "/home/jrtalbot")
+        (backup-directories-txt "/home/jrtalbot/rsync.txt"))
+    (if (= (shell-command (concat "mountpoint " drive-directory)) 0)
+        (let ((process (start-process "backup" "*backup*" "rsync" "-arvup" (concat "--files-from=" backup-directories-txt) backup-home-directory drive-directory)))
+          (display-buffer "*backup*")
+          (set-process-sentinel process #'usb-hd-backup-sentinel))
+      (if (f-directory? drive-directory)
+          (message "%s" (concat drive-directory " is a directory, but not a mountpoint.\n\nTry deleting (or renaming) this directory and replugging in your hard drive."))
+        (message "%s" "Didn't find mountpoint.")))
 
-(defun backup-sentinel (p)
-  "Waits for backup process P to finish then ejects the hard drive."
-  (when (= 0 (process-exit-status p))
-    (start-process "eject" "*backup*" "eject" "/media/jrtalbot/BACKUP")
-    (message "%s" "Backed up!"))
-  )
+    (defun usb-hd-backup-sentinel (p s)
+      "Waits for backup process P to return finished status S then ejects the hard drive."
+      (when (= 0 (process-exit-status p))
+        (shell-command (concat "eject " drive-directory))
+        (message "%s" "Backed up!")))))
 
 (provide 'usb-hd-backup)
 
